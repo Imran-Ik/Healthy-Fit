@@ -127,13 +127,15 @@
   // locks or the tab is backgrounded — that needs a native
   // pedometer plugin (see README "Going further").
   // =========================================================
-  const StepTracker = {
+    const StepTracker = {
     active: false,
-    _lastMag: 0,
+    _smoothedMag: 9.8,
+    _baseline: 9.8,
+    _armed: false,
     _lastStepTime: 0,
-    _baseline: 9.8,        // approx. gravity, in m/s^2, adapts over time
-    _minIntervalMs: 280,   // fastest plausible step cadence (~215 steps/min ceiling)
-    _thresholdDelta: 1.6,  // how far above the rolling baseline counts as a step
+    _minIntervalMs: 350,   // fastest plausible step cadence (~170 steps/min ceiling)
+    _thresholdHigh: 3.2,   // delta above baseline needed to "arm" a step — raise this if hand movement still triggers it
+    _thresholdLow: 1.2,    // delta must fall back below this before the next step can count
     _onStep: null,
 
     isSupported(){
@@ -141,7 +143,6 @@
     },
 
     async requestPermission(){
-      // iOS 13+ requires an explicit, user-gesture-triggered permission prompt.
       if(typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
         try{
           const res = await DeviceMotionEvent.requestPermission();
@@ -150,7 +151,6 @@
           return false;
         }
       }
-      // Android / older browsers: no explicit prompt, permission is implicit.
       return true;
     },
 
@@ -158,6 +158,9 @@
       if(this.active) return;
       this._onStep = onStep;
       this._lastStepTime = 0;
+      this._armed = false;
+      this._smoothedMag = 9.8;
+      this._baseline = 9.8;
       window.addEventListener('devicemotion', this._handleMotion);
       this.active = true;
     },
@@ -171,23 +174,35 @@
       const acc = event.accelerationIncludingGravity || event.acceleration;
       if(!acc || acc.x===null) return;
       const x=acc.x||0, y=acc.y||0, z=acc.z||0;
-      const magnitude = Math.sqrt(x*x + y*y + z*z);
+      const rawMag = Math.sqrt(x*x + y*y + z*z);
 
-      // Slowly adapt the baseline toward the current reading (low-pass filter)
-      // so the "resting" magnitude tracks whichever way the phone is held.
-      StepTracker._baseline = StepTracker._baseline*0.92 + magnitude*0.08;
+      // Fast smoothing filters out single-sample spikes (a quick hand
+      // twitch) while still tracking the ~1-3Hz rhythm of an actual step.
+      StepTracker._smoothedMag = StepTracker._smoothedMag*0.7 + rawMag*0.3;
 
-      const delta = magnitude - StepTracker._baseline;
+      // Slow smoothing tracks the "resting" level — gravity plus however
+      // the phone is currently being held — so the threshold adapts
+      // instead of being thrown off by holding the phone at an angle.
+      StepTracker._baseline = StepTracker._baseline*0.95 + rawMag*0.05;
+
+      const delta = StepTracker._smoothedMag - StepTracker._baseline;
       const now = Date.now();
 
-      if(delta > StepTracker._thresholdDelta && (now - StepTracker._lastStepTime) > StepTracker._minIntervalMs){
+      // Hysteresis: a step only counts on the rise above thresholdHigh,
+      // and won't arm again until motion has actually settled back below
+      // thresholdLow. A single jerky hand movement rises and falls too
+      // fast/inconsistently to reliably clear both gates the way a real
+      // step's swing-and-plant motion does.
+      if(!StepTracker._armed && delta > StepTracker._thresholdHigh && (now - StepTracker._lastStepTime) > StepTracker._minIntervalMs){
+        StepTracker._armed = true;
         StepTracker._lastStepTime = now;
         if(StepTracker._onStep) StepTracker._onStep();
+      } else if(StepTracker._armed && delta < StepTracker._thresholdLow){
+        StepTracker._armed = false;
       }
     }
   };
   StepTracker._handleMotion = StepTracker._handleMotion.bind(StepTracker);
-
   // =========================================================
   // Rendering
   // =========================================================
