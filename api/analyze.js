@@ -1,5 +1,5 @@
 // Serverless function (Vercel-style: /api/analyze.js -> POST /api/analyze)
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.6-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const ANALYSIS_PROMPT = `You are a nutrition estimation assistant analyzing a food photo for a calorie-tracking app.
