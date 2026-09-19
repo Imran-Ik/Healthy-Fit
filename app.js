@@ -134,7 +134,7 @@
     _armed: false,
     _lastStepTime: 0,
     _minIntervalMs: 350,   // fastest plausible step cadence (~170 steps/min ceiling)
-    _thresholdHigh: 5,   // delta above baseline needed to "arm" a step — raise this if hand movement still triggers it
+    _thresholdHigh: 4.5,   // delta above baseline needed to "arm" a step — raise this if hand movement still triggers it
     _thresholdLow: 1.2,    // delta must fall back below this before the next step can count
     _onStep: null,
 
