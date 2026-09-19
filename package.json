@@ -1,0 +1,9 @@
+{
+  "name": "kilo-nutrition-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kilo — calorie, water and step tracker with AI food-photo analysis",
+  "engines": {
+    "node": ">=18"
+  }
+}
