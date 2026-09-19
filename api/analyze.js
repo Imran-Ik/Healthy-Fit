@@ -37,9 +37,9 @@ module.exports = async (req, res) => {
   if (!imageBase64) { res.status(400).json({ error: 'No image provided' }); return; }
 
   try {
-    const geminiRes = await fetch(GEMINI_URL, {
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [
