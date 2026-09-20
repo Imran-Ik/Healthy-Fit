@@ -1,4 +1,4 @@
-const CACHE = 'kilo-v1';
+const CACHE = 'kilo-v2'; // bump this string any time you update sw.js or want to force a refresh
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -13,8 +13,8 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Network-first for the API (always want fresh AI results); cache-first for
-// the static shell so the app still opens offline.
+// Network-first now: always try to fetch the live version, so a fresh
+// deploy shows up immediately. Only fall back to cache if offline.
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.pathname.startsWith('/api/')) {
@@ -22,6 +22,12 @@ self.addEventListener('fetch', e => {
     return;
   }
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
