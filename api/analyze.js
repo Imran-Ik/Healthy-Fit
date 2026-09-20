@@ -1,22 +1,43 @@
 // Serverless function (Vercel-style: /api/analyze.js -> POST /api/analyze)
+//
+// This is the ONLY place your Gemini API key lives. Never put the key
+// directly in app.js or any file the browser downloads.
+//
+// Set GEMINI_API_KEY in your Vercel project's Environment Variables.
+
+// Model names get renamed/retired over time — if this 404s again, check
+// https://ai.google.dev/gemini-api/docs/models for the current free list.
 const MODEL = 'gemini-3.6-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const ANALYSIS_PROMPT = `You are a nutrition estimation assistant analyzing a food photo for a calorie-tracking app.
-Identify the food or meal shown, estimate a realistic single-serving portion, and estimate its total calories and macronutrients for what's visible.`;
 
+The photo may show a single dish, or a full plate/thali/combo meal made up of several separate dishes (for example: rice, dal, a vegetable sabzi, roti, curd, pickle, a dessert). Identify EACH distinct dish separately rather than giving one combined total for the whole plate — list every dish you can visually distinguish, each with its own realistic portion size and its own nutrition estimate. Include dietary fiber for every dish, not just carbs/protein/fat.`;
+
+// Gemini returns JSON matching this schema exactly, so the app doesn't
+// have to guess how to parse free-text.
 const RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
-    foodName: { type: 'STRING' },
-    portionEstimate: { type: 'STRING' },
-    calories: { type: 'NUMBER' },
-    protein_g: { type: 'NUMBER' },
-    carbs_g: { type: 'NUMBER' },
-    fat_g: { type: 'NUMBER' },
-    confidence: { type: 'STRING', enum: ['low', 'medium', 'high'] }
+    items: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING' },
+          portionEstimate: { type: 'STRING' },
+          calories: { type: 'NUMBER' },
+          protein_g: { type: 'NUMBER' },
+          carbs_g: { type: 'NUMBER' },
+          fat_g: { type: 'NUMBER' },
+          fiber_g: { type: 'NUMBER' },
+          confidence: { type: 'STRING', enum: ['low', 'medium', 'high'] }
+        },
+        required: ['name', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g', 'confidence']
+      }
+    }
   },
-  required: ['foodName', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'confidence']
+  required: ['items']
 };
 
 module.exports = async (req, res) => {
@@ -81,6 +102,12 @@ module.exports = async (req, res) => {
       const match = text.match(/\{[\s\S]*\}/);
       if (match) parsed = JSON.parse(match[0]);
       else throw e;
+    }
+
+    // Always hand back { items: [...] } to the front end, even if the
+    // model (or an older cached prompt) ever returns a single flat object.
+    if (!Array.isArray(parsed.items)) {
+      parsed = { items: [parsed] };
     }
 
     res.status(200).json(parsed);
